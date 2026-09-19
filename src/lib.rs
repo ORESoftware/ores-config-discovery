@@ -114,18 +114,19 @@ impl Located {
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum DiscoveryError {
-    /// The name contained a path separator, or was empty. Only a bare file
-    /// name is a config name; anything else would turn discovery into an
-    /// arbitrary path probe.
+    /// The supplied name was not exactly one normal path component. Only a
+    /// bare file name is a config name; anything else would turn discovery
+    /// into an arbitrary path probe.
     NotAFileName(String),
     /// A candidate at this path is a symbolic link, which is refused.
     Symlink(PathBuf),
     /// A candidate exists but is not a regular file, and the search was
     /// configured to refuse rather than skip it.
     NotRegularFile(PathBuf),
-    /// A candidate could not be inspected, for a reason other than absence.
+    /// A config candidate or Git-boundary marker could not be inspected, for
+    /// a reason other than absence.
     Unreadable {
-        /// The candidate path.
+        /// The filesystem entry that could not be inspected.
         path: PathBuf,
         /// The I/O error kind, so a caller can rebuild an `io::Error`.
         kind: std::io::ErrorKind,
@@ -148,6 +149,15 @@ impl fmt::Display for DiscoveryError {
 }
 
 impl std::error::Error for DiscoveryError {}
+
+fn is_bare_file_name(file_name: &str) -> bool {
+    let mut components = Path::new(file_name).components();
+    matches!(
+        (components.next(), components.next()),
+        (Some(std::path::Component::Normal(component)), None)
+            if component == std::ffi::OsStr::new(file_name)
+    )
+}
 
 /// A configured upward search for one config file name.
 ///
@@ -219,12 +229,13 @@ impl<'a> Search<'a> {
     /// # Errors
     ///
     /// Fails when the name is not a bare file name, when a candidate is a
-    /// symlink or cannot be inspected, or — with [`Search::refuse_non_regular`]
-    /// — when a candidate is not a regular file. A config that is simply
-    /// absent is `Ok(None)`, because what absence means is the caller's call.
+    /// symlink or cannot be inspected, when Git-boundary metadata cannot be
+    /// inspected, or — with [`Search::refuse_non_regular`] — when a candidate
+    /// is not a regular file. A config that is simply absent is `Ok(None)`,
+    /// because what absence means is the caller's call.
     pub fn from(&self, start: &Path) -> Result<Option<Located>, DiscoveryError> {
         let file_name = self.file_name;
-        if file_name.is_empty() || file_name.contains(['/', '\\']) {
+        if !is_bare_file_name(file_name) {
             return Err(DiscoveryError::NotAFileName(file_name.to_owned()));
         }
         // Canonicalise so the ancestor chain is the real one, not one routed
@@ -249,7 +260,7 @@ impl<'a> Search<'a> {
 
         for directory in start.ancestors().take(MAX_ANCESTORS) {
             let candidate = directory.join(file_name);
-            let marker = git_marker(directory);
+            let marker = git_marker(directory)?;
             match std::fs::symlink_metadata(&candidate) {
                 Ok(meta) if meta.file_type().is_symlink() => {
                     return Err(DiscoveryError::Symlink(candidate));
@@ -285,14 +296,22 @@ impl<'a> Search<'a> {
 }
 
 /// The `.git` entry in `directory`, if any. Inspected without following
-/// symlinks, so a dangling or symlinked `.git` still marks a boundary.
-fn git_marker(directory: &Path) -> Option<GitMarker> {
-    let meta = std::fs::symlink_metadata(directory.join(".git")).ok()?;
-    Some(if meta.is_dir() {
-        GitMarker::Directory
-    } else {
-        GitMarker::File
-    })
+/// symlinks, so a dangling or symlinked `.git` still marks a boundary. Errors
+/// other than absence are propagated so a trust-boundary probe cannot fail open.
+fn git_marker(directory: &Path) -> Result<Option<GitMarker>, DiscoveryError> {
+    let path = directory.join(".git");
+    match std::fs::symlink_metadata(&path) {
+        Ok(meta) => Ok(Some(if meta.is_dir() {
+            GitMarker::Directory
+        } else {
+            GitMarker::File
+        })),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(DiscoveryError::Unreadable {
+            path,
+            kind: error.kind(),
+        }),
+    }
 }
 
 /// Locates the nearest `file_name` from the working directory, bounded by
@@ -574,12 +593,54 @@ mod tests {
         let tree = Tree::new("path");
         tree.file(".git/HEAD");
         tree.file("secret/.ores-mw.toml");
-        for bad in ["secret/.ores-mw.toml", "../.ores-mw.toml", ""] {
+        for bad in [
+            "secret/.ores-mw.toml",
+            "../.ores-mw.toml",
+            "/.ores-mw.toml",
+            "",
+            ".",
+            "..",
+        ] {
             assert!(matches!(
                 Search::new(bad).from(&tree.0),
                 Err(DiscoveryError::NotAFileName(_))
             ));
         }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_prefixed_or_separated_names_are_not_config_names() {
+        let tree = Tree::new("windows-path");
+        for bad in [
+            r"secret\.ores-mw.toml",
+            r"C:relative.toml",
+            r"C:\absolute.toml",
+            r"\absolute.toml",
+        ] {
+            assert!(matches!(
+                Search::new(bad).from(&tree.0),
+                Err(DiscoveryError::NotAFileName(_))
+            ));
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn git_boundary_metadata_errors_fail_closed() {
+        // A path component that is a regular file makes probing `<path>/.git`
+        // fail with ENOTDIR on Unix. The boundary helper must surface that
+        // failure rather than collapsing it into "no Git boundary".
+        let tree = Tree::new("git-metadata-error");
+        let not_a_directory = tree.file("not-a-directory");
+        let expected = not_a_directory.join(".git");
+        assert!(matches!(
+            git_marker(&not_a_directory),
+            Err(DiscoveryError::Unreadable {
+                path,
+                kind: std::io::ErrorKind::NotADirectory,
+            }) if path == expected
+        ));
     }
 
     #[cfg(unix)]
