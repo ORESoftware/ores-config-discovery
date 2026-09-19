@@ -1,5 +1,5 @@
 use crate::internal::{canonical_bound, canonical_start, git_marker, is_bare_file_name};
-use crate::{DiscoveryError, GitMarker, Located, MAX_ANCESTORS};
+use crate::{DiscoveryError, Located, MAX_ANCESTORS};
 use std::path::{Path, PathBuf};
 
 /// One requested filename and the nearest config found for it, if any.
@@ -224,6 +224,7 @@ fn empty_results(file_names: &[&str]) -> Vec<BatchResult> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::GitMarker;
     use std::fs;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
