@@ -2,7 +2,7 @@
 name = "ores-config-discovery"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.88.0"
+rust-version = "1.78"
 license = "MIT"
 description = "Finds the nearest fleet config file by walking up from the working directory, and reports when it is not at a repository root"
 repository = "https://github.com/ORESoftware/ores-config-discovery"

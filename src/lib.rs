@@ -198,6 +198,25 @@ pub fn locate_and_report(file_name: &str) -> Result<Option<Located>, DiscoveryEr
     Ok(located)
 }
 
+/// [`locate_and_report`] from an explicit starting directory.
+///
+/// # Errors
+///
+/// See [`locate`].
+pub fn locate_and_report_from(
+    start: &Path,
+    file_name: &str,
+) -> Result<Option<Located>, DiscoveryError> {
+    let located = locate_from(start, file_name)?;
+    if let Some(warning) = located
+        .as_ref()
+        .and_then(|found| found.misplacement_warning(file_name))
+    {
+        report(&warning);
+    }
+    Ok(located)
+}
+
 /// Emits a warning through the ores-otel logger when it is compiled in.
 ///
 /// The logger is constructed per call: discovery runs once at startup, and a
