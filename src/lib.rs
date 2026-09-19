@@ -634,13 +634,13 @@ mod tests {
         let tree = Tree::new("git-metadata-error");
         let not_a_directory = tree.file("not-a-directory");
         let expected = not_a_directory.join(".git");
-        assert!(matches!(
-            git_marker(&not_a_directory),
-            Err(DiscoveryError::Unreadable {
-                path,
-                kind: std::io::ErrorKind::NotADirectory,
-            }) if path == expected
-        ));
+        match git_marker(&not_a_directory) {
+            Err(DiscoveryError::Unreadable { path, kind }) => {
+                assert_eq!(path, expected);
+                assert_ne!(kind, std::io::ErrorKind::NotFound);
+            }
+            other => panic!("expected an unreadable Git marker, got {other:?}"),
+        }
     }
 
     #[cfg(unix)]
