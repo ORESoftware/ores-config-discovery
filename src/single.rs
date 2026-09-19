@@ -45,6 +45,7 @@
 
 #![forbid(unsafe_code)]
 
+use crate::internal::{canonical_bound, canonical_start, git_marker, is_bare_file_name};
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -150,15 +151,6 @@ impl fmt::Display for DiscoveryError {
 
 impl std::error::Error for DiscoveryError {}
 
-fn is_bare_file_name(file_name: &str) -> bool {
-    let mut components = Path::new(file_name).components();
-    matches!(
-        (components.next(), components.next()),
-        (Some(std::path::Component::Normal(component)), None)
-            if component == std::ffi::OsStr::new(file_name)
-    )
-}
-
 /// A configured upward search for one config file name.
 ///
 /// ```no_run
@@ -238,25 +230,9 @@ impl<'a> Search<'a> {
         if !is_bare_file_name(file_name) {
             return Err(DiscoveryError::NotAFileName(file_name.to_owned()));
         }
-        // Canonicalise so the ancestor chain is the real one, not one routed
-        // through a symlinked working directory; keep the given path if it
-        // does not exist, so the outcome is "absent" rather than a panic.
-        let canonical = std::fs::canonicalize(start).unwrap_or_else(|_| start.to_path_buf());
-        let start = if canonical.is_file() {
-            canonical
-                .parent()
-                .map_or(canonical.clone(), Path::to_path_buf)
-        } else {
-            canonical
-        };
-        // The bound must be compared in the same canonical form as the
-        // ancestor chain. `$HOME` often reaches its directory through a
-        // symlink; compared raw, it would never equal a canonical ancestor and
-        // the walk would escape it.
-        let bound = self
-            .bound
-            .as_deref()
-            .map(|limit| std::fs::canonicalize(limit).unwrap_or_else(|_| limit.to_path_buf()));
+
+        let start = canonical_start(start);
+        let bound = canonical_bound(self.bound.as_deref());
 
         for directory in start.ancestors().take(MAX_ANCESTORS) {
             let candidate = directory.join(file_name);
@@ -292,25 +268,6 @@ impl<'a> Search<'a> {
             }
         }
         Ok(None)
-    }
-}
-
-/// The `.git` entry in `directory`, if any. Inspected without following
-/// symlinks, so a dangling or symlinked `.git` still marks a boundary. Errors
-/// other than absence are propagated so a trust-boundary probe cannot fail open.
-fn git_marker(directory: &Path) -> Result<Option<GitMarker>, DiscoveryError> {
-    let path = directory.join(".git");
-    match std::fs::symlink_metadata(&path) {
-        Ok(meta) => Ok(Some(if meta.is_dir() {
-            GitMarker::Directory
-        } else {
-            GitMarker::File
-        })),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(DiscoveryError::Unreadable {
-            path,
-            kind: error.kind(),
-        }),
     }
 }
 
