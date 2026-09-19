@@ -12,4 +12,6 @@ mod single;
 pub use single::*;
 
 mod batch;
-pub use batch::{discover_many, discover_many_bounded, discover_many_from, BatchResult};
+pub use batch::{
+    discover_many, discover_many_bounded, discover_many_from, BatchResult, BatchSearch,
+};
