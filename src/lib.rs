@@ -62,7 +62,10 @@ pub const MAX_ANCESTORS: usize = 64;
 pub enum GitMarker {
     /// `.git` is a directory: a normal clone.
     Directory,
-    /// `.git` is a file (or anything else): a worktree or submodule.
+    /// `.git` is a file, or anything else that is not a real directory: a
+    /// worktree, a submodule — or a *symlink*, even one pointing at a directory.
+    /// The entry is inspected without following links, because a link's target
+    /// is not evidence about the directory the link sits in.
     File,
 }
 
@@ -577,6 +580,30 @@ mod tests {
                 Err(DiscoveryError::NotAFileName(_))
             ));
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_symlinked_git_directory_is_a_boundary_but_not_root_placement() {
+        // `.git` is inspected without following symlinks, so a `.git` symlink
+        // that points at a real directory still ends the walk but is NOT
+        // `GitMarker::Directory`. Strict-placement consumers (opto-sync, the
+        // OTel SDK) previously used `join(".git").is_dir()`, which followed the
+        // link; this is the deliberate, security-conservative replacement: a
+        // link's target is not evidence about the directory it sits in.
+        let tree = Tree::new("gitlink");
+        tree.file(".ores-rl.toml");
+        tree.file("realgit/HEAD");
+        let repo = tree.dir("repo");
+        std::os::unix::fs::symlink(tree.0.join("realgit"), repo.join(".git")).expect("symlink");
+        tree.file("repo/.opto-sync.toml");
+
+        let found = search(&tree.dir("repo/src"), ".opto-sync.toml").expect("located");
+        assert_eq!(found.git_marker, Some(GitMarker::File));
+        assert!(found.at_repo_root, "lenient callers still see a root");
+        assert!(!found.beside_git_directory(), "strict callers do not");
+        // And it is a boundary: the config above the linked repo stays invisible.
+        assert!(search(&tree.dir("repo/src"), ".ores-rl.toml").is_none());
     }
 
     #[cfg(unix)]
