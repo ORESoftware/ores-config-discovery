@@ -1,6 +1,6 @@
 [package]
 name = "ores-config-discovery"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 rust-version = "1.78"
 license = "MIT"
@@ -16,15 +16,14 @@ all = "warn"
 pedantic = "warn"
 
 [features]
-# On by default so a server that does nothing special still reports a
-# misplaced config through the fleet logger. Libraries that do not want the
-# telemetry stack can depend on this crate with `default-features = false`
-# and handle `Located::at_repo_root` themselves.
-default = ["otel-warning"]
+# Keep the default graph compatible with the crate's declared Rust 1.78 MSRV.
+# Consumers that want structured OTel warning emission opt in explicitly; the
+# logger currently requires Rust 1.88. Without it, warnings fall back to stderr.
+default = []
 otel-warning = ["dep:oresoftware-next-loggers"]
 
 [dependencies]
 # Pinned by revision: a branch reference would let a fresh resolution pick up a
 # later logger commit and change behaviour, the dependency graph, or the MSRV
-# underneath every consumer that pins this crate.
+# underneath consumers that explicitly enable `otel-warning`.
 oresoftware-next-loggers = { git = "https://github.com/ores-otel/ores.otel.log", rev = "47cfa716ea453a85a17e5f7c2015edc404550afb", optional = true }
