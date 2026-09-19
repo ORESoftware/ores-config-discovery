@@ -36,7 +36,7 @@ dependencies = [
 [[package]]
 name = "oresoftware-next-loggers"
 version = "0.1.0"
-source = "git+https://github.com/ores-otel/ores.otel.log?branch=main#47cfa716ea453a85a17e5f7c2015edc404550afb"
+source = "git+https://github.com/ores-otel/ores.otel.log?rev=47cfa716ea453a85a17e5f7c2015edc404550afb#47cfa716ea453a85a17e5f7c2015edc404550afb"
 dependencies = [
  "serde",
  "serde_json",

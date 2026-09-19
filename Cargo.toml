@@ -24,4 +24,7 @@ default = ["otel-warning"]
 otel-warning = ["dep:oresoftware-next-loggers"]
 
 [dependencies]
-oresoftware-next-loggers = { git = "https://github.com/ores-otel/ores.otel.log", branch = "main", optional = true }
+# Pinned by revision: a branch reference would let a fresh resolution pick up a
+# later logger commit and change behaviour, the dependency graph, or the MSRV
+# underneath every consumer that pins this crate.
+oresoftware-next-loggers = { git = "https://github.com/ores-otel/ores.otel.log", rev = "47cfa716ea453a85a17e5f7c2015edc404550afb", optional = true }

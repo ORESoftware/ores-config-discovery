@@ -143,6 +143,11 @@ pub fn locate_bounded(
     // through a symlinked working directory; keep the given path if it does
     // not exist, so the error surfaces as "absent" rather than as a panic.
     let start = std::fs::canonicalize(start).unwrap_or_else(|_| start.to_path_buf());
+    // The bound must be compared in the same canonical form as the ancestor
+    // chain. `$HOME` often reaches its directory through a symlink; compared
+    // raw, it would never equal a canonical ancestor and the walk would escape it.
+    let bound =
+        bound.map(|limit| std::fs::canonicalize(limit).unwrap_or_else(|_| limit.to_path_buf()));
 
     for directory in start.ancestors().take(MAX_ANCESTORS) {
         let candidate = directory.join(file_name);
@@ -163,7 +168,7 @@ pub fn locate_bounded(
         }
         // The root itself was searched above; a missing file there ends the
         // walk, so nothing above the repository can govern it.
-        if is_repo_root(directory) || bound.is_some_and(|limit| directory == limit) {
+        if is_repo_root(directory) || bound.as_deref().is_some_and(|limit| directory == limit) {
             break;
         }
     }
@@ -403,6 +408,23 @@ mod tests {
                 Err(DiscoveryError::NotAFileName(_))
             ));
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_symlinked_home_still_bounds_the_walk() {
+        // $HOME commonly reaches its directory through a symlink. The start is
+        // canonicalised, so a raw bound would never match and the walk would
+        // escape HOME and adopt a config above it.
+        let tree = Tree::new("homelink");
+        tree.file(".ores-rl.toml");
+        let project = tree.dir("realhome/proj");
+        let link = tree.0.join("homelink");
+        std::os::unix::fs::symlink(tree.0.join("realhome"), &link).expect("symlink");
+        assert_eq!(
+            locate_bounded(&project, ".ores-rl.toml", Some(&link)),
+            Ok(None)
+        );
     }
 
     #[cfg(unix)]
