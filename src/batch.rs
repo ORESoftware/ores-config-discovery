@@ -331,7 +331,10 @@ mod tests {
         assert_eq!(batch.len(), 2);
         assert_eq!(batch[0].file_name, ".ores-otel.toml");
         assert_eq!(batch[1].file_name, ".ores-otel.toml");
-        assert_eq!(batch[0].located.as_ref().map(|found| &found.path), Some(&config));
+        assert_eq!(
+            batch[0].located.as_ref().map(|found| &found.path),
+            Some(&config)
+        );
         assert_eq!(batch[1].located, batch[0].located);
     }
 
@@ -347,7 +350,10 @@ mod tests {
         let batch = discover_many_bounded(&start, &names, None).expect("batch succeeds");
         let single = crate::locate_bounded(&start, names[0], None).expect("single succeeds");
         assert_eq!(batch[0].located, single);
-        assert_eq!(batch[0].located.as_ref().map(|found| &found.path), Some(&root_config));
+        assert_eq!(
+            batch[0].located.as_ref().map(|found| &found.path),
+            Some(&root_config)
+        );
     }
 
     #[test]
@@ -392,13 +398,23 @@ mod tests {
 
         let at_bound = tree.file("home/user/.ores-compose.yaml");
         let second = discover_many_bounded(&start, &names, Some(&bound)).expect("batch succeeds");
-        assert_eq!(second[0].located.as_ref().map(|found| &found.path), Some(&at_bound));
+        assert_eq!(
+            second[0].located.as_ref().map(|found| &found.path),
+            Some(&at_bound)
+        );
     }
 
     #[test]
     fn invalid_names_fail_before_traversal() {
         let tree = Tree::new("invalid");
-        for bad in ["secret/.ores-mw.toml", "../.ores-mw.toml", "/.ores-mw.toml", "", ".", ".."] {
+        for bad in [
+            "secret/.ores-mw.toml",
+            "../.ores-mw.toml",
+            "/.ores-mw.toml",
+            "",
+            ".",
+            "..",
+        ] {
             assert!(matches!(
                 discover_many_bounded(&tree.0, &[".ores-otel.toml", bad], None),
                 Err(DiscoveryError::NotAFileName(name)) if name == bad
@@ -459,7 +475,8 @@ mod tests {
         tree.file("repo/.ores-otel.toml");
         let names = [".ores-otel.toml", ".ores-rl.toml"];
 
-        let batch = discover_many_bounded(&tree.dir("repo/src"), &names, None).expect("batch succeeds");
+        let batch =
+            discover_many_bounded(&tree.dir("repo/src"), &names, None).expect("batch succeeds");
         let found = batch[0].located.as_ref().expect("local config found");
         assert_eq!(found.git_marker, Some(GitMarker::File));
         assert!(found.at_repo_root);
