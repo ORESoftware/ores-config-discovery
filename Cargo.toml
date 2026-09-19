@@ -1,0 +1,27 @@
+[package]
+name = "ores-config-discovery"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.88.0"
+license = "MIT"
+description = "Finds the nearest fleet config file by walking up from the working directory, and reports when it is not at a repository root"
+repository = "https://github.com/ORESoftware/ores-config-discovery"
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[lints.clippy]
+all = "warn"
+pedantic = "warn"
+
+[features]
+# On by default so a server that does nothing special still reports a
+# misplaced config through the fleet logger. Libraries that do not want the
+# telemetry stack can depend on this crate with `default-features = false`
+# and handle `Located::at_repo_root` themselves.
+default = ["otel-warning"]
+otel-warning = ["dep:oresoftware-next-loggers"]
+
+[dependencies]
+oresoftware-next-loggers = { git = "https://github.com/ores-otel/ores.otel.log", branch = "main", optional = true }
