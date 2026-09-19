@@ -1,3 +1,4 @@
+use crate::internal::{canonical_bound, canonical_start, git_marker, is_bare_file_name};
 use crate::{DiscoveryError, GitMarker, Located, MAX_ANCESTORS};
 use std::path::{Path, PathBuf};
 
@@ -103,18 +104,8 @@ impl<'a> BatchSearch<'a> {
             return Ok(Vec::new());
         }
 
-        let canonical = std::fs::canonicalize(start).unwrap_or_else(|_| start.to_path_buf());
-        let start = if canonical.is_file() {
-            canonical
-                .parent()
-                .map_or(canonical.clone(), Path::to_path_buf)
-        } else {
-            canonical
-        };
-        let bound = self
-            .bound
-            .as_deref()
-            .map(|limit| std::fs::canonicalize(limit).unwrap_or_else(|_| limit.to_path_buf()));
+        let start = canonical_start(start);
+        let bound = canonical_bound(self.bound.as_deref());
 
         let mut results = empty_results(self.file_names);
 
@@ -228,31 +219,6 @@ fn empty_results(file_names: &[&str]) -> Vec<BatchResult> {
             located: None,
         })
         .collect()
-}
-
-fn is_bare_file_name(file_name: &str) -> bool {
-    let mut components = Path::new(file_name).components();
-    matches!(
-        (components.next(), components.next()),
-        (Some(std::path::Component::Normal(component)), None)
-            if component == std::ffi::OsStr::new(file_name)
-    )
-}
-
-fn git_marker(directory: &Path) -> Result<Option<GitMarker>, DiscoveryError> {
-    let path = directory.join(".git");
-    match std::fs::symlink_metadata(&path) {
-        Ok(meta) => Ok(Some(if meta.is_dir() {
-            GitMarker::Directory
-        } else {
-            GitMarker::File
-        })),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(DiscoveryError::Unreadable {
-            path,
-            kind: error.kind(),
-        }),
-    }
 }
 
 #[cfg(test)]
