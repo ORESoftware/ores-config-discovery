@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 /// One requested filename and the nearest config found for it, if any.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub struct BatchResult {
     /// The exact bare filename requested by the caller.
     pub file_name: String,
@@ -84,8 +85,8 @@ pub fn discover_many_bounded(
     } else {
         canonical
     };
-    let bound = bound
-        .map(|limit| std::fs::canonicalize(limit).unwrap_or_else(|_| limit.to_path_buf()));
+    let bound =
+        bound.map(|limit| std::fs::canonicalize(limit).unwrap_or_else(|_| limit.to_path_buf()));
 
     let mut results = empty_results(file_names);
 
@@ -241,8 +242,8 @@ mod tests {
         tree.file("vendor/inner/.git/HEAD");
         let start = tree.dir("vendor/inner/src");
 
-        let batch = discover_many_bounded(&start, &[".ores-compose.yaml"], None)
-            .expect("batch succeeds");
+        let batch =
+            discover_many_bounded(&start, &[".ores-compose.yaml"], None).expect("batch succeeds");
         assert_eq!(batch[0].located, None);
     }
 
