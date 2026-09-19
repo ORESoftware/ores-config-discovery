@@ -8,6 +8,8 @@
 
 #![forbid(unsafe_code)]
 
+mod internal;
+
 mod single;
 pub use single::*;
 
