@@ -346,10 +346,14 @@ mod tests {
     fn missing_start_fails_closed_for_batch_too() {
         let tree = Tree::new("missing-start");
         let missing = tree.0.join("missing/a/b");
-        assert!(matches!(
-            BatchSearch::new(&[".ores-rl.toml"]).from(&missing),
-            Err(DiscoveryError::Unreadable { path, kind: std::io::ErrorKind::NotFound }) if path == missing
-        ));
+        let names = [".ores-rl.toml"];
+        match BatchSearch::new(&names).from(&missing) {
+            Err(DiscoveryError::Unreadable { path, kind }) => {
+                assert_eq!(path, missing);
+                assert_eq!(kind, std::io::ErrorKind::NotFound);
+            }
+            other => panic!("expected missing start to fail closed, got {other:?}"),
+        }
     }
 
     #[test]
@@ -357,12 +361,14 @@ mod tests {
         let tree = Tree::new("missing-bound");
         let start = tree.dir("project/deep");
         let missing_bound = tree.0.join("missing-home");
-        assert!(matches!(
-            BatchSearch::new(&[".ores-rl.toml"])
-                .bound(&missing_bound)
-                .from(&start),
-            Err(DiscoveryError::Unreadable { path, kind: std::io::ErrorKind::NotFound }) if path == missing_bound
-        ));
+        let names = [".ores-rl.toml"];
+        match BatchSearch::new(&names).bound(&missing_bound).from(&start) {
+            Err(DiscoveryError::Unreadable { path, kind }) => {
+                assert_eq!(path, missing_bound);
+                assert_eq!(kind, std::io::ErrorKind::NotFound);
+            }
+            other => panic!("expected missing bound to fail closed, got {other:?}"),
+        }
     }
 
     #[test]
