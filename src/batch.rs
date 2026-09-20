@@ -69,12 +69,14 @@ impl<'a> BatchSearch<'a> {
     ///
     /// # Errors
     ///
-    /// See [`BatchSearch::from`]. An unreadable working directory yields an
-    /// all-`None` result, matching [`crate::Search::from_cwd`].
+    /// See [`BatchSearch::from`]. Failure to resolve the current working
+    /// directory is an error, not an all-`None` result: only actual config
+    /// absence is represented by `None`.
     pub fn from_cwd(&self) -> Result<Vec<BatchResult>, DiscoveryError> {
-        let Ok(start) = std::env::current_dir() else {
-            return Ok(empty_results(self.file_names));
-        };
+        let start = std::env::current_dir().map_err(|error| DiscoveryError::Unreadable {
+            path: PathBuf::from("."),
+            kind: error.kind(),
+        })?;
         self.from(&start)
     }
 
@@ -89,10 +91,10 @@ impl<'a> BatchSearch<'a> {
     ///
     /// # Errors
     ///
-    /// Fails on an invalid name, symlinked candidate, unreadable candidate,
-    /// unreadable Git-boundary metadata, or (when configured) a non-regular
-    /// candidate. A missing config is represented by `BatchResult { located:
-    /// None, .. }`.
+    /// Fails on an invalid name, an unresolvable traversal start or explicit
+    /// bound, symlinked candidate, unreadable candidate, unreadable Git-boundary
+    /// metadata, or (when configured) a non-regular candidate. A missing config
+    /// is represented by `BatchResult { located: None, .. }`.
     pub fn from(&self, start: &Path) -> Result<Vec<BatchResult>, DiscoveryError> {
         for file_name in self.file_names {
             if !is_bare_file_name(file_name) {
@@ -104,8 +106,8 @@ impl<'a> BatchSearch<'a> {
             return Ok(Vec::new());
         }
 
-        let start = canonical_start(start);
-        let bound = canonical_bound(self.bound.as_deref());
+        let start = canonical_start(start)?;
+        let bound = canonical_bound(self.bound.as_deref())?;
 
         let mut results = empty_results(self.file_names);
 
@@ -338,6 +340,35 @@ mod tests {
                 .from(&start),
             Err(DiscoveryError::NotRegularFile(path)) if path == non_regular
         ));
+    }
+
+    #[test]
+    fn missing_start_fails_closed_for_batch_too() {
+        let tree = Tree::new("missing-start");
+        let missing = tree.0.join("missing/a/b");
+        let names = [".ores-rl.toml"];
+        match BatchSearch::new(&names).from(&missing) {
+            Err(DiscoveryError::Unreadable { path, kind }) => {
+                assert_eq!(path, missing);
+                assert_eq!(kind, std::io::ErrorKind::NotFound);
+            }
+            other => panic!("expected missing start to fail closed, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn missing_explicit_bound_fails_closed_for_batch_too() {
+        let tree = Tree::new("missing-bound");
+        let start = tree.dir("project/deep");
+        let missing_bound = tree.0.join("missing-home");
+        let names = [".ores-rl.toml"];
+        match BatchSearch::new(&names).bound(&missing_bound).from(&start) {
+            Err(DiscoveryError::Unreadable { path, kind }) => {
+                assert_eq!(path, missing_bound);
+                assert_eq!(kind, std::io::ErrorKind::NotFound);
+            }
+            other => panic!("expected missing bound to fail closed, got {other:?}"),
+        }
     }
 
     #[test]

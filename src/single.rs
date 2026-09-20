@@ -124,10 +124,10 @@ pub enum DiscoveryError {
     /// A candidate exists but is not a regular file, and the search was
     /// configured to refuse rather than skip it.
     NotRegularFile(PathBuf),
-    /// A config candidate or Git-boundary marker could not be inspected, for
-    /// a reason other than absence.
+    /// A traversal start/bound, config candidate, or Git-boundary marker could
+    /// not be resolved or inspected for a reason other than absence.
     Unreadable {
-        /// The filesystem entry that could not be inspected.
+        /// The filesystem entry that could not be resolved or inspected.
         path: PathBuf,
         /// The I/O error kind, so a caller can rebuild an `io::Error`.
         kind: std::io::ErrorKind,
@@ -143,7 +143,7 @@ impl fmt::Display for DiscoveryError {
                 write!(f, "config at {} is not a regular file", path.display())
             }
             Self::Unreadable { path, kind } => {
-                write!(f, "cannot inspect config at {}: {kind}", path.display())
+                write!(f, "cannot resolve or inspect {}: {kind}", path.display())
             }
         }
     }
@@ -207,11 +207,14 @@ impl<'a> Search<'a> {
     ///
     /// # Errors
     ///
-    /// See [`Search::from`]. An unreadable working directory is `Ok(None)`.
+    /// See [`Search::from`]. Failure to resolve the current working directory is
+    /// an error, not `Ok(None)`: only actual config absence is represented by
+    /// `None`.
     pub fn from_cwd(&self) -> Result<Option<Located>, DiscoveryError> {
-        let Ok(start) = std::env::current_dir() else {
-            return Ok(None);
-        };
+        let start = std::env::current_dir().map_err(|error| DiscoveryError::Unreadable {
+            path: PathBuf::from("."),
+            kind: error.kind(),
+        })?;
         self.from(&start)
     }
 
@@ -220,19 +223,20 @@ impl<'a> Search<'a> {
     ///
     /// # Errors
     ///
-    /// Fails when the name is not a bare file name, when a candidate is a
-    /// symlink or cannot be inspected, when Git-boundary metadata cannot be
-    /// inspected, or — with [`Search::refuse_non_regular`] — when a candidate
-    /// is not a regular file. A config that is simply absent is `Ok(None)`,
-    /// because what absence means is the caller's call.
+    /// Fails when the name is not a bare file name, when the traversal start or
+    /// explicit bound cannot be canonicalized, when a candidate is a symlink or
+    /// cannot be inspected, when Git-boundary metadata cannot be inspected, or
+    /// — with [`Search::refuse_non_regular`] — when a candidate is not a regular
+    /// file. A config that is simply absent is `Ok(None)`, because what absence
+    /// means is the caller's call.
     pub fn from(&self, start: &Path) -> Result<Option<Located>, DiscoveryError> {
         let file_name = self.file_name;
         if !is_bare_file_name(file_name) {
             return Err(DiscoveryError::NotAFileName(file_name.to_owned()));
         }
 
-        let start = canonical_start(start);
-        let bound = canonical_bound(self.bound.as_deref());
+        let start = canonical_start(start)?;
+        let bound = canonical_bound(self.bound.as_deref())?;
 
         for directory in start.ancestors().take(MAX_ANCESTORS) {
             let candidate = directory.join(file_name);
@@ -271,8 +275,8 @@ impl<'a> Search<'a> {
     }
 }
 
-/// Locates the nearest `file_name` from the working directory, bounded by
-/// `$HOME` outside any repository.
+/// Locates the nearest `file_name` from the current working directory, bounded
+/// by `$HOME` outside any repository.
 ///
 /// # Errors
 ///
@@ -469,6 +473,36 @@ mod tests {
     fn a_missing_config_is_absent_rather_than_an_error() {
         let tree = Tree::new("missing");
         assert!(search(&tree.dir("a/b"), ".auth-shared.toml").is_none());
+    }
+
+    #[test]
+    fn a_missing_start_is_an_error_not_a_lexical_walk() {
+        let tree = Tree::new("missing-start");
+        let missing = tree.0.join("does-not-exist/a/b");
+        match Search::new(".ores-rl.toml").from(&missing) {
+            Err(DiscoveryError::Unreadable { path, kind }) => {
+                assert_eq!(path, missing);
+                assert_eq!(kind, std::io::ErrorKind::NotFound);
+            }
+            other => panic!("expected missing start to fail closed, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_missing_explicit_bound_is_an_error_not_an_ignored_boundary() {
+        let tree = Tree::new("missing-bound");
+        let start = tree.dir("project/deep");
+        let missing_bound = tree.0.join("missing-home");
+        match Search::new(".ores-rl.toml")
+            .bound(&missing_bound)
+            .from(&start)
+        {
+            Err(DiscoveryError::Unreadable { path, kind }) => {
+                assert_eq!(path, missing_bound);
+                assert_eq!(kind, std::io::ErrorKind::NotFound);
+            }
+            other => panic!("expected missing bound to fail closed, got {other:?}"),
+        }
     }
 
     #[test]
