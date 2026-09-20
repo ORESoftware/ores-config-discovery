@@ -275,8 +275,8 @@ impl<'a> Search<'a> {
     }
 }
 
-/// Locates the nearest `file_name` from the working directory, bounded by
-/// `$HOME` outside any repository.
+/// Locates the nearest `file_name` from the current working directory, bounded
+/// by `$HOME` outside any repository.
 ///
 /// # Errors
 ///
@@ -479,10 +479,13 @@ mod tests {
     fn a_missing_start_is_an_error_not_a_lexical_walk() {
         let tree = Tree::new("missing-start");
         let missing = tree.0.join("does-not-exist/a/b");
-        assert!(matches!(
-            Search::new(".ores-rl.toml").from(&missing),
-            Err(DiscoveryError::Unreadable { path, kind: std::io::ErrorKind::NotFound }) if path == missing
-        ));
+        match Search::new(".ores-rl.toml").from(&missing) {
+            Err(DiscoveryError::Unreadable { path, kind }) => {
+                assert_eq!(path, missing);
+                assert_eq!(kind, std::io::ErrorKind::NotFound);
+            }
+            other => panic!("expected missing start to fail closed, got {other:?}"),
+        }
     }
 
     #[test]
@@ -490,12 +493,16 @@ mod tests {
         let tree = Tree::new("missing-bound");
         let start = tree.dir("project/deep");
         let missing_bound = tree.0.join("missing-home");
-        assert!(matches!(
-            Search::new(".ores-rl.toml")
-                .bound(&missing_bound)
-                .from(&start),
-            Err(DiscoveryError::Unreadable { path, kind: std::io::ErrorKind::NotFound }) if path == missing_bound
-        ));
+        match Search::new(".ores-rl.toml")
+            .bound(&missing_bound)
+            .from(&start)
+        {
+            Err(DiscoveryError::Unreadable { path, kind }) => {
+                assert_eq!(path, missing_bound);
+                assert_eq!(kind, std::io::ErrorKind::NotFound);
+            }
+            other => panic!("expected missing bound to fail closed, got {other:?}"),
+        }
     }
 
     #[test]
