@@ -1,0 +1,42 @@
+[package]
+org = "oresoftware"
+name = "ores-config-discovery"
+version = "0.2.2"
+description = "Find the nearest fleet config file by walking up from the working directory"
+language = "rust"
+license = "MIT"
+
+[package.repository]
+vcs = "git"
+url = "https://github.com/ORESoftware/ores-config-discovery"
+
+[dependencies]
+
+[install]
+dir = ".vendor/.zed"
+
+[targets.rust]
+dir = "."
+adapter = "rust"
+
+[targets.contracts]
+dir = "contracts"
+name = "ores-config-discovery-contracts"
+adapter = "none"
+
+[targets.conformance]
+dir = "conformance"
+name = "ores-config-discovery-conformance"
+adapter = "none"
+
+[build]
+command = "cargo build --locked"
+
+[scripts]
+test = "sh conformance/check.sh"
+
+[publish]
+include_readme = true
+tag_format = "v{version}"
+smoke_test = "cargo test --manifest-path \"$ZED_PKG_TEST_TARGET/Cargo.toml\" --locked --all-targets"
+exclude = [".env", ".env.*", ".vendor/.zed/**", ".zed/**", ".zed-pack/**", "target/**", "**/*.log", ".DS_Store"]
