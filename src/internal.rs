@@ -38,9 +38,7 @@ pub(crate) fn canonical_start(start: &Path) -> Result<PathBuf, DiscoveryError> {
 /// the traversal start. An operator-supplied bound that cannot be resolved is an
 /// error: silently using its lexical spelling can make the equality check miss
 /// and allow discovery to escape above the intended boundary.
-pub(crate) fn canonical_bound(
-    bound: Option<&Path>,
-) -> Result<Option<PathBuf>, DiscoveryError> {
+pub(crate) fn canonical_bound(bound: Option<&Path>) -> Result<Option<PathBuf>, DiscoveryError> {
     bound
         .map(|limit| std::fs::canonicalize(limit).map_err(|error| unreadable(limit, error)))
         .transpose()
