@@ -42,10 +42,7 @@ pub(crate) fn canonical_bound(
     bound: Option<&Path>,
 ) -> Result<Option<PathBuf>, DiscoveryError> {
     bound
-        .map(|limit| {
-            std::fs::canonicalize(limit)
-                .map_err(|error| unreadable(limit, error))
-        })
+        .map(|limit| std::fs::canonicalize(limit).map_err(|error| unreadable(limit, error)))
         .transpose()
 }
 
