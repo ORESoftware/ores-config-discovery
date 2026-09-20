@@ -10,7 +10,7 @@ pub(crate) fn is_bare_file_name(file_name: &str) -> bool {
     )
 }
 
-fn unreadable(path: &Path, error: std::io::Error) -> DiscoveryError {
+fn unreadable(path: &Path, error: &std::io::Error) -> DiscoveryError {
     DiscoveryError::Unreadable {
         path: path.to_path_buf(),
         kind: error.kind(),
@@ -24,7 +24,7 @@ fn unreadable(path: &Path, error: std::io::Error) -> DiscoveryError {
 /// lexical path. Falling back can move the trust boundary the caller believes it
 /// is using and can let an unrelated parent config govern the process.
 pub(crate) fn canonical_start(start: &Path) -> Result<PathBuf, DiscoveryError> {
-    let canonical = std::fs::canonicalize(start).map_err(|error| unreadable(start, error))?;
+    let canonical = std::fs::canonicalize(start).map_err(|error| unreadable(start, &error))?;
     Ok(if canonical.is_file() {
         canonical
             .parent()
@@ -40,7 +40,7 @@ pub(crate) fn canonical_start(start: &Path) -> Result<PathBuf, DiscoveryError> {
 /// and allow discovery to escape above the intended boundary.
 pub(crate) fn canonical_bound(bound: Option<&Path>) -> Result<Option<PathBuf>, DiscoveryError> {
     bound
-        .map(|limit| std::fs::canonicalize(limit).map_err(|error| unreadable(limit, error)))
+        .map(|limit| std::fs::canonicalize(limit).map_err(|error| unreadable(limit, &error)))
         .transpose()
 }
 
