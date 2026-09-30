@@ -1,0 +1,14 @@
+{
+  "schema": "ores.config-discovery.release-target/v1",
+  "version": "0.2.2",
+  "tag": "v0.2.2",
+  "target_commit": "1ffd94663a110f77fcd5e1143fd10f89b1f284e0",
+  "authority_pr": 7,
+  "target_policy": "code_authority_not_later_docs_only_main",
+  "required_evidence": [
+    "rust-1.78-default-graph-green",
+    "rust-1.88-opt-in-otel-green"
+  ],
+  "consumer_pin_policy": "retain_reviewed_raw_commit_sha",
+  "notes": "Release metadata must not cause fleet consumers to replace their reviewed immutable commit pins with mutable resolution."
+}
