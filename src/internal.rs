@@ -62,3 +62,19 @@ pub(crate) fn git_marker(directory: &Path) -> Result<Option<GitMarker>, Discover
         }),
     }
 }
+
+/// Reject a bound outside the start's canonical ancestor chain.
+///
+/// Without this check the equality-only walk never reaches an unrelated bound
+/// and may accidentally consider configuration above the caller's trust root.
+pub(crate) fn validate_bound(start: &Path, bound: Option<&Path>) -> Result<(), DiscoveryError> {
+    if let Some(bound) = bound {
+        if !start.starts_with(bound) {
+            return Err(DiscoveryError::BoundOutsideStart {
+                start: start.to_path_buf(),
+                bound: bound.to_path_buf(),
+            });
+        }
+    }
+    Ok(())
+}
