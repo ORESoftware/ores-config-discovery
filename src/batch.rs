@@ -1,4 +1,4 @@
-use crate::internal::{canonical_bound, canonical_start, git_marker, is_bare_file_name};
+use crate::internal::{canonical_bound, canonical_start, git_marker, is_bare_file_name, validate_bound};
 use crate::{DiscoveryError, Located, MAX_ANCESTORS};
 use std::path::{Path, PathBuf};
 
@@ -108,6 +108,7 @@ impl<'a> BatchSearch<'a> {
 
         let start = canonical_start(start)?;
         let bound = canonical_bound(self.bound.as_deref())?;
+        validate_bound(&start, bound.as_deref())?;
 
         let mut results = empty_results(self.file_names);
 
@@ -481,4 +482,24 @@ mod tests {
         assert!(!found.beside_git_directory());
         assert_eq!(batch[1].located, None, "parent config must stay invisible");
     }
+
+    #[test]
+    fn unrelated_explicit_bound_fails_closed_for_the_whole_batch() {
+        let tree = Tree::new("bound-outside");
+        tree.file(".ores-rl.toml");
+        let start = tree.dir("service/deep");
+        let unrelated_bound = tree.dir("unrelated-home");
+        let names = [".ores-rl.toml", ".ores-otel.toml"];
+
+        let result = BatchSearch::new(&names)
+            .bound(unrelated_bound.clone())
+            .from(&start);
+        assert!(matches!(
+            result,
+            Err(DiscoveryError::BoundOutsideStart { start: found_start, bound })
+                if found_start == start && bound == unrelated_bound
+        ));
+    }
+
+
 }
