@@ -45,7 +45,9 @@
 
 #![forbid(unsafe_code)]
 
-use crate::internal::{canonical_bound, canonical_start, git_marker, is_bare_file_name, validate_bound};
+use crate::internal::{
+    canonical_bound, canonical_start, git_marker, is_bare_file_name, validate_bound,
+};
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -720,6 +722,4 @@ mod tests {
                 if found_start == start && bound == unrelated_bound
         ));
     }
-
-
 }
