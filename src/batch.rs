@@ -1,4 +1,6 @@
-use crate::internal::{canonical_bound, canonical_start, git_marker, is_bare_file_name, validate_bound};
+use crate::internal::{
+    canonical_bound, canonical_start, git_marker, is_bare_file_name, validate_bound,
+};
 use crate::{DiscoveryError, Located, MAX_ANCESTORS};
 use std::path::{Path, PathBuf};
 
@@ -500,6 +502,4 @@ mod tests {
                 if found_start == start && bound == unrelated_bound
         ));
     }
-
-
 }
