@@ -45,7 +45,7 @@
 
 #![forbid(unsafe_code)]
 
-use crate::internal::{canonical_bound, canonical_start, git_marker, is_bare_file_name};
+use crate::internal::{canonical_bound, canonical_start, git_marker, is_bare_file_name, validate_bound};
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -119,6 +119,14 @@ pub enum DiscoveryError {
     /// bare file name is a config name; anything else would turn discovery
     /// into an arbitrary path probe.
     NotAFileName(String),
+    /// The configured canonical fallback bound is not an ancestor of the
+    /// canonical start, so an upward walk could never reach it.
+    BoundOutsideStart {
+        /// Canonical directory from which the search starts.
+        start: PathBuf,
+        /// Canonical directory where the caller expected the walk to stop.
+        bound: PathBuf,
+    },
     /// A candidate at this path is a symbolic link, which is refused.
     Symlink(PathBuf),
     /// A candidate exists but is not a regular file, and the search was
@@ -138,6 +146,12 @@ impl fmt::Display for DiscoveryError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::NotAFileName(name) => write!(f, "{name:?} is not a bare config file name"),
+            Self::BoundOutsideStart { start, bound } => write!(
+                f,
+                "search start {} is outside configured bound {}",
+                start.display(),
+                bound.display()
+            ),
             Self::Symlink(path) => write!(f, "refusing symlinked config at {}", path.display()),
             Self::NotRegularFile(path) => {
                 write!(f, "config at {} is not a regular file", path.display())
@@ -237,6 +251,7 @@ impl<'a> Search<'a> {
 
         let start = canonical_start(start)?;
         let bound = canonical_bound(self.bound.as_deref())?;
+        validate_bound(&start, bound.as_deref())?;
 
         for directory in start.ancestors().take(MAX_ANCESTORS) {
             let candidate = directory.join(file_name);
@@ -688,4 +703,23 @@ mod tests {
             Err(DiscoveryError::Symlink(_))
         ));
     }
+
+    #[test]
+    fn unrelated_explicit_bound_fails_closed_before_ancestor_lookup() {
+        let tree = Tree::new("bound-outside");
+        tree.file(".ores-rl.toml");
+        let start = tree.dir("service/deep");
+        let unrelated_bound = tree.dir("unrelated-home");
+
+        let result = Search::new(".ores-rl.toml")
+            .bound(unrelated_bound.clone())
+            .from(&start);
+        assert!(matches!(
+            result,
+            Err(DiscoveryError::BoundOutsideStart { start: found_start, bound })
+                if found_start == start && bound == unrelated_bound
+        ));
+    }
+
+
 }
