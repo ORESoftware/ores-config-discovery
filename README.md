@@ -73,6 +73,7 @@ entry hits an unsafe or unreadable path.
   `BatchSearch::refuse_non_regular(true)` make such a candidate an error.
 - **Only a bare file name is accepted.** A separator, prefix, `.` or `..` turns
   discovery into a path probe, so it is rejected before traversal.
+- **An explicit fallback bound must contain the start.** After canonicalization, an unrelated bound is an error, never a missed stopping point that lets discovery escape to a parent directory. This also applies to the `$HOME` bound used by convenience APIs outside their home tree.
 - **The walk is bounded.** At most 64 ancestors are examined.
 
 ## Features and MSRV
